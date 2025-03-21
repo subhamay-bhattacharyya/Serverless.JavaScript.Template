@@ -1,0 +1,7 @@
+git clone 
+
+npm install --save-dev serverless   
+
+npx sls deploy
+
+npx sls remove
