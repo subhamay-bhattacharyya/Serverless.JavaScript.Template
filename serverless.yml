@@ -1,0 +1,82 @@
+service: apigw-01-js-sls
+
+params:
+  default:
+    kmsKeyArn: arn:aws:kms:us-east-1:637423502513:key/494509e4-3bc5-44b8-9c4d-12449900d395
+    vpcStackName: private-vpc-root-stack
+    nestedStacksS3Bucket: subhamay-aws-cfn-nested-stack-templates-us-east-1
+  devl:
+    kmsKeyArn: arn:aws:kms:us-east-1:637423502513:key/494509e4-3bc5-44b8-9c4d-12449900d395
+    nestedStacksS3Bucket: subhamay-aws-cfn-nested-stack-templates-us-east-1
+  test:
+    kmsKeyArn: arn:aws:kms:us-east-1:590183790608:key/550fb1b2-0139-47ce-a570-3c356ad53ebb
+    nestedStacksS3Bucket: subhamay-aws-cfn-nested-stack-templates-us-east-1
+  prod:
+    kmsKeyArn: arn:aws:kms:us-east-1:590183790608:key/e9b903b9-534a-4766-9774-5d10b5146d56
+    nestedStacksS3Bucket: subhamay-aws-cfn-nested-stack-templates-us-east-1
+
+provider:
+  name: aws
+  disableRollback: true
+  stage: ${opt:stage, 'devl'}
+  runtime: nodejs18.x
+  region: us-east-1
+  memorySize: 256
+  timeout: 20
+  stackName: apigw-lab-01-js-lambda-integration-sls
+  logRetentionInDays: 14
+  kmsKeyArn: ${param:kmsKeyArn, 'arn:aws:kms:us-east-1:637423502513:key/494509e4-3bc5-44b8-9c4d-12449900d395'}
+  architecture: arm64
+  apiName: ${self:service}-lambda-proxy-integration-${sls:stage}-${self:provider.region}
+  apiGateway:
+    stage: ${opt:apiStage, 'v1'}
+    description: API Gateway with proxy integration to Lambda function using Node.js
+  endpointType: REGIONAL 
+  vpc:
+    securityGroupIds:
+      - !ImportValue "${param:vpcStackName}-VpcEndpointSecurityGroupId"
+    subnetIds:
+      - !ImportValue "${param:vpcStackName}-PrivateSubnetAZ1Id"
+      - !ImportValue "${param:vpcStackName}-PrivateSubnetAZ2Id"
+  tags:
+    ProjectName: ${self:custom.projectName}
+    Environment: ${sls:stage}
+    GitHubRef: ${opt:github_ref, 'ref_name'}
+    GitHubURL: ${opt:github_url, 'https://github.com/subhamay-bhattacharyya/1111-api-gateway-js-sls'}
+    GitHubWFRunNumber: ${opt:github_wf_run_num, '1'}
+    GitHubSHA: ${opt:github_sha, 'd3b07384d113edec49eaa6238ad5ff00f6fb3796'}
+    GitHubRepository: ${opt:github_repository, '1111-api-gateway-js-sls'}
+  tracing:
+    apiGateway: true
+    lambda: true
+
+custom:
+  projectName: ${self:service}
+  lambdaFunctionBaseName: proxy-integration-lambda
+  lambdaFunctionDescription: Lambda function to be used for API Gateway Proxy Integration.
+  bundle:
+    linting: false
+  
+functions:
+  apiHandlerLambda:
+    name: ${self:custom.projectName}-${self:custom.lambdaFunctionBaseName}-${sls:stage}-${self:provider.region}
+    description: ${self:custom.lambdaFunctionDescription}
+    handler: src/handlers/hello.handler
+    logs:
+      logGroup: /aws/lambda/${self:custom.projectName}-${self:custom.lambdaFunctionBaseName}-${sls:stage}-${self:provider.region}
+    package:
+      patterns:
+        - src/handlers/**
+      individually: true
+    events:
+      - http:
+          path: hello
+          method: any
+          cors: true
+          integration: lambda-proxy
+
+resources:
+  Description: "API Gateway Lab-01: Serverless template to create Lambda Functions, CloudWatch Log Group, IAM Role and API Gateway Rest API with Lambda proxy integration."
+
+plugins:
+  - serverless-offline                  # Optional: Enables local development with `serverless offline`
